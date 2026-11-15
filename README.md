@@ -1,4 +1,4 @@
-# SALT
+# ECST
 
 ## Installation
 
