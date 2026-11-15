@@ -1,0 +1,17 @@
+{
+  "dataset": "qwen25",
+  "seed": 50,
+  "epochs": 40,
+  "batch_size": 32,
+  "learning_rate": 0.00005,
+  "weight_decay": 0.01,
+  "dropout": 0.47,
+  "qwen_model": "Qwen/Qwen2.5-7B",
+  "future_steps": 3,
+  "decay": 0.7,
+  "data_topk": 100,
+  "data_threshold": 0.01,
+  "semantic_epochs": 50,
+  "semantic_topk": 20,
+  "semantic_threshold": 0.05
+}
