@@ -27,8 +27,12 @@ def main():
     parser.add_argument('--device', default='cuda:0')
     parser.add_argument('--mode', choices=['train', 'eval'], default='train')
     parser.add_argument('--checkpoint')
+    parser.add_argument('--f1-mode', choices=['oracle', 'threshold'], default=None)
     args = parser.parse_args()
     config = read_config(args.config)
+    f1_mode = args.f1_mode or config.get('f1_mode', 'oracle')
+    config['f1_mode'] = f1_mode
+    config['f1_threshold'] = 0.5 if f1_mode == 'threshold' else None
     seed_everything(config['seed'])
     device = torch.device(args.device)
     if device.type == 'cuda':
@@ -56,12 +60,12 @@ def main():
                 torch.nn.utils.clip_grad_norm_(model.parameters(), .5)
                 optimizer.step()
             train.on_epoch_end()
-            metrics = evaluate(valid.labels, predict(model, valid), frequency)
+            metrics = evaluate(valid.labels, predict(model, valid), frequency, f1_mode=f1_mode)
             history.append({'epoch': epoch, **metrics})
             print(history[-1], flush=True)
             if metrics['W-F1'] > best:
                 best = metrics['W-F1']
-                torch.save({'epoch': epoch, 'model_state_dict': model.state_dict(), 'best_f1': best}, output / 'best_checkpoint.pt')
+                torch.save({'epoch': epoch, 'model_state_dict': model.state_dict(), 'best_f1': best, 'f1_mode': f1_mode}, output / 'best_checkpoint.pt')
             (output / 'validation.json').write_text(json.dumps(history, indent=2))
         checkpoint = output / 'best_checkpoint.pt'
     else:
@@ -69,10 +73,13 @@ def main():
             parser.error('--checkpoint is required in eval mode')
         checkpoint = args.checkpoint
     state = torch.load(checkpoint, map_location=device, weights_only=True)
+    checkpoint_mode = state.get('f1_mode', 'oracle')
+    if args.mode == 'eval' and args.f1_mode is None:
+        f1_mode = checkpoint_mode
     model.load_state_dict(state['model_state_dict'], strict=True)
     test = Dataset(standard / 'test', config['batch_size'], device)
     scores = predict(model, test)
-    result = {'epoch': state['epoch'], **evaluate(test.labels, scores, frequency)}
+    result = {'epoch': state['epoch'], 'f1_mode': f1_mode, 'f1_threshold': 0.5 if f1_mode == 'threshold' else None, **evaluate(test.labels, scores, frequency, f1_mode=f1_mode)}
     np.savez_compressed(output / 'test_predictions.npz', scores=scores, labels=test.labels)
     (output / 'test_metrics.json').write_text(json.dumps(result, indent=2))
     print(result, flush=True)
